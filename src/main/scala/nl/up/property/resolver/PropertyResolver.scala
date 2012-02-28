@@ -4,6 +4,7 @@ import java.util.Properties
 import scala.io.Source
 import java.io.File
 import scala.io.Codec
+import util.parsing.combinator.RegexParsers
 
 /**
  * Trait to resolve placeholders contained in Maps.
@@ -45,13 +46,38 @@ trait PropertyResolver {
    * 2. detect non-existing references: -> throw Exception or don't resolve
    */
   def resolve(inputMaps: Map[String, String]*): Map[String, String] = {
-	//TODO: implement...	  
-    Map()
+    def consolidated : Map[String,  String] = Map(inputMaps.flatten: _*)
+    consolidated.map(pair => (pair._1, replacePlaceholder(pair._2, consolidated)))
   }
 
- }
+  def lookup(s: String, map: Map[String,  String]): String = {
+    map.get(s) match {
+      case Some(x) => x
+      case _ => throw new IllegalArgumentException("None")
+    }
+  }
 
+  def replacePlaceholder(s: String, map: Map[String, String]): String = {
+    val all : PlaceholderParser.ParseResult[Full] = PlaceholderParser.parse(PlaceholderParser.full, s)
+    all.get.words.map(_ match {
+      case x : Placeholder => replacePlaceholder(lookup(x.w, map), map)
+      case x : SimpleWord => x.w
+    }).mkString(" ")
+  }
+}
 
+sealed trait Word
+case class Placeholder(w: String) extends Word 
+case class SimpleWord(w: String) extends Word
+
+case class Full(words: List[Word])
+
+object PlaceholderParser extends RegexParsers {
+  def word =  "[A-Za-z0-9.]+".r ^^ { case w => SimpleWord(w) }
+  def placeholder = "${" ~>  "[A-Za-z0-9.]+".r <~ "}" ^^ { case s: String => Placeholder(s) }
+  def wordOrPlaceholder = word|placeholder
+  def full = rep(wordOrPlaceholder) ^^ { case wp: List[Word] => Full(wp) }
+}
 
 /**
  * ====================================================================
@@ -78,7 +104,7 @@ trait PropertyLoader {
     if (file.exists()) {
       prop.load(Source.fromFile(file)(Codec.UTF8).bufferedReader())
     } else {
-      prop.load(Thread.currentThread().getContextClassLoader().getResourceAsStream(path))
+      prop.load(Thread.currentThread().getContextClassLoader.getResourceAsStream(path))
     }
     prop
   }
