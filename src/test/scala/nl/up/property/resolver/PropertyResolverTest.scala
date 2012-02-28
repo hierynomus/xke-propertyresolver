@@ -43,7 +43,7 @@ class PropertyResolverTest extends Specification /*with ScalaCheck*/ {
         ("b" -> "${a} dit precies op te lossen?"))
       //optionally fill in blanks
       //val resolved = resolve(props)
-      //sort(resolved) must_== TreeMap(("a", "Hoe dacht je it precies op te lossen?"), ("b", "Hoe dacht je it precies op te lossen?"))
+      //sort(resolved) must_== TreeMap(("a", "Hoe dacht je dit precies op te lossen?"), ("b", "Hoe dacht je dit precies op te lossen?"))
       resolve(props) must throwA[IllegalArgumentException]
     }
     "BONUS: resolve chained cyclic references" in {
