@@ -5,6 +5,8 @@ import scala.io.Source
 import java.io.File
 import scala.io.Codec
 import util.parsing.combinator.RegexParsers
+import scala.None
+import collection.immutable.List
 
 /**
  * Trait to resolve placeholders contained in Maps.
@@ -47,49 +49,47 @@ trait PropertyResolver {
    */
   def resolve(inputMaps: Map[String, String]*): Map[String, String] = {
     val consolidated : Map[String,  String] = Map(inputMaps.flatten: _*)
-//    def lookupMap: Map[Placeholder, Full] = buildLookup(consolidated)
-    consolidated.map(pair => (pair._1, replacePlaceholder(pair._2, consolidated)))
+    def resolved: Map[Placeholder, Full] = startResolve(buildLookup(consolidated))
+    resolved.map {case (p, f) => (p.w, f.words.collect({case Some(x: SimpleWord) => x.w}).mkString(" "))}
   }
 
-//  def tryReplace(placeholder: Placeholder, full: Full, map: Map[String, String]): Full = {
-//    full.words.map(_ match {
-//      case Some(x: Placeholder) => if (placeholder != x) tryReplace(placeholder, parse(map.get(x.w).getOrElse("")), map)
-//      case Some(x: SimpleWord) =>
-//      case _ => _
-//    })
-//  }
-//
-//  def buildLookup(map: Map[String, String]): Map[Placeholder, Full] = {
-//    map.map({case (k, v) => (Placeholder(k), tryReplace(Placeholder(k), parse(v), map))})
-//  }
+  def startResolve(map: Map[Placeholder,  Full]): Map[Placeholder, Full] = {
+    map.map { case (p, f) => (p, resolveDeep(p, f, map)) }
+  }
 
+  def resolveDeep(placeholder: Placeholder, full: Full, map: Map[Placeholder, Full]): Full = {
+    Full(full.words.map(_ match {
+      case Some(x: Placeholder) =>
+        if (placeholder != x)
+          resolveDeep(placeholder, lookup(x, map), map).words
+        else List(None)
+      case Some(x: SimpleWord) => List(Some(x))
+      case None => List(None)
+    }).flatten)
+  }
 
-  def lookup(s: String, map: Map[String,  String]): String = {
-    map.get(s) match {
+  def buildLookup(map: Map[String, String]): Map[Placeholder, Full] = {
+    map.map {case (k, v) => (Placeholder(k), parse(v)) }
+  }
+
+  def lookup(p: Placeholder, map: Map[Placeholder, Full]): Full = {
+    map.get(p) match {
       case Some(x) => x
       case _ => throw new IllegalArgumentException("None")
     }
   }
 
   def parse(s: String) = PlaceholderParser.parse(PlaceholderParser.full, s).get
-  
-  def replacePlaceholder(s: String, map: Map[String, String]): String = {
-    parse(s).words.map(_ match {
-      case Some(x : Placeholder) => replacePlaceholder(lookup(x.w, map), map)
-      case Some(x : SimpleWord) => x.w
-      case _ => ""
-    }).mkString(" ")
-  }
 }
 
 sealed trait Word
 case class Placeholder(w: String) extends Word 
 case class SimpleWord(w: String) extends Word
 
-case class Full(words: List[Some[Word]])
+case class Full(words: List[Option[Word]])
 
 object PlaceholderParser extends RegexParsers {
-  def word =  "[A-Za-z0-9.]+".r ^^ { case w => SimpleWord(w) }
+  def word =  "[A-Za-z0-9?.]+".r ^^ { case w => SimpleWord(w) }
   def placeholder = "${" ~>  "[A-Za-z0-9.]+".r <~ "}" ^^ { case s: String => Placeholder(s) }
   def wordOrPlaceholder = word|placeholder
   def full = rep(wordOrPlaceholder) ^^ { case wp: List[Word] => Full(wp.map(Some(_))) }

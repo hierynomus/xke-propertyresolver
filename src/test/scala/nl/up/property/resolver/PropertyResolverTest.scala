@@ -42,9 +42,8 @@ class PropertyResolverTest extends Specification /*with ScalaCheck*/ {
         ("a" -> "Hoe dacht je ${b}"),
         ("b" -> "${a} dit precies op te lossen?"))
       //optionally fill in blanks
-      //val resolved = resolve(props)
-      //sort(resolved) must_== TreeMap(("a", "Hoe dacht je dit precies op te lossen?"), ("b", "Hoe dacht je dit precies op te lossen?"))
-      resolve(props) must throwA[IllegalArgumentException]
+      val resolved = resolve(props)
+      sort(resolved) must_== TreeMap(("a", "Hoe dacht je dit precies op te lossen?"), ("b", "Hoe dacht je dit precies op te lossen?"))
     }
     "BONUS: resolve chained cyclic references" in {
       val props = Map(
@@ -52,7 +51,9 @@ class PropertyResolverTest extends Specification /*with ScalaCheck*/ {
         ("b" -> "b points to ${c}"),
         ("c" -> "c points to ${a}"))
       //optionally don't resolve reference
-      resolve(props) must throwA[IllegalArgumentException]
+      val resolved = resolve(props)
+      sort(resolved) must_== TreeMap(("a", "a points to b points to c points to"), ("b", "b points to c points to a points to"), ("c", "c points to a points to b points to"))
+//      resolve(props) must throwA[IllegalArgumentException]
     }
     "BONUS: not resolve non-existant references" in {
       val props = Map(
