@@ -46,9 +46,23 @@ trait PropertyResolver {
    * 2. detect non-existing references: -> throw Exception or don't resolve
    */
   def resolve(inputMaps: Map[String, String]*): Map[String, String] = {
-    def consolidated : Map[String,  String] = Map(inputMaps.flatten: _*)
+    val consolidated : Map[String,  String] = Map(inputMaps.flatten: _*)
+//    def lookupMap: Map[Placeholder, Full] = buildLookup(consolidated)
     consolidated.map(pair => (pair._1, replacePlaceholder(pair._2, consolidated)))
   }
+
+//  def tryReplace(placeholder: Placeholder, full: Full, map: Map[String, String]): Full = {
+//    full.words.map(_ match {
+//      case Some(x: Placeholder) => if (placeholder != x) tryReplace(placeholder, parse(map.get(x.w).getOrElse("")), map)
+//      case Some(x: SimpleWord) =>
+//      case _ => _
+//    })
+//  }
+//
+//  def buildLookup(map: Map[String, String]): Map[Placeholder, Full] = {
+//    map.map({case (k, v) => (Placeholder(k), tryReplace(Placeholder(k), parse(v), map))})
+//  }
+
 
   def lookup(s: String, map: Map[String,  String]): String = {
     map.get(s) match {
@@ -57,11 +71,13 @@ trait PropertyResolver {
     }
   }
 
+  def parse(s: String) = PlaceholderParser.parse(PlaceholderParser.full, s).get
+  
   def replacePlaceholder(s: String, map: Map[String, String]): String = {
-    val all : PlaceholderParser.ParseResult[Full] = PlaceholderParser.parse(PlaceholderParser.full, s)
-    all.get.words.map(_ match {
-      case x : Placeholder => replacePlaceholder(lookup(x.w, map), map)
-      case x : SimpleWord => x.w
+    parse(s).words.map(_ match {
+      case Some(x : Placeholder) => replacePlaceholder(lookup(x.w, map), map)
+      case Some(x : SimpleWord) => x.w
+      case _ => ""
     }).mkString(" ")
   }
 }
@@ -70,13 +86,13 @@ sealed trait Word
 case class Placeholder(w: String) extends Word 
 case class SimpleWord(w: String) extends Word
 
-case class Full(words: List[Word])
+case class Full(words: List[Some[Word]])
 
 object PlaceholderParser extends RegexParsers {
   def word =  "[A-Za-z0-9.]+".r ^^ { case w => SimpleWord(w) }
   def placeholder = "${" ~>  "[A-Za-z0-9.]+".r <~ "}" ^^ { case s: String => Placeholder(s) }
   def wordOrPlaceholder = word|placeholder
-  def full = rep(wordOrPlaceholder) ^^ { case wp: List[Word] => Full(wp) }
+  def full = rep(wordOrPlaceholder) ^^ { case wp: List[Word] => Full(wp.map(Some(_))) }
 }
 
 /**
